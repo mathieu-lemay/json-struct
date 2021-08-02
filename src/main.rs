@@ -1,5 +1,5 @@
 use clap::{App, Arg};
-use serde_json::Value;
+use serde_json::{Number, Value};
 use std::fs::File;
 use std::io::{stdin, BufReader, Read, Result, Write};
 use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
@@ -14,8 +14,26 @@ fn get_reader(filename: &str) -> Box<dyn Read> {
 }
 
 trait EntryWriter {
-    fn write(&self, path: &str, value: &str) -> Result<()> {
+    fn write_string(&self, path: &str, value: &str) -> Result<()> {
         println!("{} => {}", path, value);
+
+        Ok(())
+    }
+
+    fn write_number(&self, path: &str, value: &Number) -> Result<()> {
+        println!("{} => {}", path, value);
+
+        Ok(())
+    }
+
+    fn write_bool(&self, path: &str, value: bool) -> Result<()> {
+        println!("{} => {}", path, value);
+
+        Ok(())
+    }
+
+    fn write_null(&self, path: &str) -> Result<()> {
+        println!("{} => null", path);
 
         Ok(())
     }
@@ -38,10 +56,8 @@ impl ColoredWriter {
         let writer = BufferWriter::stdout(color_choice);
         Self { writer }
     }
-}
 
-impl EntryWriter for ColoredWriter {
-    fn write(&self, path: &str, value: &str) -> Result<()> {
+    fn _write_value(&self, path: &str, value: &str, color: Option<Color>, bold: bool) -> Result<()> {
         let mut buffer = self.writer.buffer();
 
         buffer.set_color(ColorSpec::new().set_fg(Some(Color::Blue)))?;
@@ -50,12 +66,30 @@ impl EntryWriter for ColoredWriter {
         buffer.reset()?;
         write!(&mut buffer, " => ")?;
 
-        buffer.set_color(ColorSpec::new().set_fg(Some(Color::Green)))?;
+        buffer.set_color(ColorSpec::new().set_fg(color).set_bold(bold))?;
         writeln!(&mut buffer, "{}", value)?;
 
         self.writer.print(&buffer)?;
 
         Ok(())
+    }
+}
+
+impl EntryWriter for ColoredWriter {
+    fn write_string(&self, path: &str, value: &str) -> Result<()> {
+        self._write_value(path, &format!("\"{}\"", value), Some(Color::Green), false)
+    }
+
+    fn write_number(&self, path: &str, value: &Number) -> Result<()> {
+        self._write_value(path, &value.to_string(), None, false)
+    }
+
+    fn write_bool(&self, path: &str, value: bool) -> Result<()> {
+        self._write_value(path, &value.to_string(), None, false)
+    }
+
+    fn write_null(&self, path: &str) -> Result<()> {
+        self._write_value(path, "null", Some(Color::Black), true)
     }
 }
 
@@ -109,10 +143,10 @@ fn print_value(path: &str, value: Value, writer: &dyn EntryWriter) -> Result<()>
 
             Ok(())
         }
-        Value::String(s) => writer.write(path, &format!("\"{}\"", s)),
-        Value::Number(n) => writer.write(path, &n.to_string()),
-        Value::Bool(b) => writer.write(path, &b.to_string()),
-        Value::Null => writer.write(path, "null"),
+        Value::String(s) => writer.write_string(path, &s),
+        Value::Number(n) => writer.write_number(path, &n),
+        Value::Bool(b) => writer.write_bool(path, b),
+        Value::Null => writer.write_null(path),
     }
 }
 
