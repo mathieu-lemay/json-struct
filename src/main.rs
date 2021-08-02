@@ -57,7 +57,13 @@ impl ColoredWriter {
         Self { writer }
     }
 
-    fn _write_value(&self, path: &str, value: &str, color: Option<Color>, bold: bool) -> Result<()> {
+    fn _write_value(
+        &self,
+        path: &str,
+        value: &str,
+        color: Option<Color>,
+        bold: bool,
+    ) -> Result<()> {
         let mut buffer = self.writer.buffer();
 
         buffer.set_color(ColorSpec::new().set_fg(Some(Color::Blue)))?;
@@ -182,4 +188,195 @@ fn main() -> Result<()> {
     let v: Value = serde_json::from_reader(rd)?;
 
     print_value(".", v, &(*writer))
+}
+
+#[cfg(test)]
+mod test_print_value {
+    use super::{print_value, EntryWriter};
+
+    use serde_json::{Map, Number, Value};
+    use std::io::Result;
+    use std::sync::Mutex;
+
+    struct TestWriter {
+        buffer: Mutex<Vec<String>>,
+    }
+
+    impl TestWriter {
+        fn new() -> Self {
+            Self {
+                buffer: Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    impl EntryWriter for TestWriter {
+        fn write_string(&self, path: &str, value: &str) -> Result<()> {
+            let value = format!("{} => String({})", path, value);
+            self.buffer.lock().unwrap().push(value);
+
+            Ok(())
+        }
+
+        fn write_number(&self, path: &str, value: &Number) -> Result<()> {
+            let value = format!("{} => Number({})", path, value);
+            self.buffer.lock().unwrap().push(value);
+
+            Ok(())
+        }
+
+        fn write_bool(&self, path: &str, value: bool) -> Result<()> {
+            let value = format!("{} => Bool({})", path, value);
+            self.buffer.lock().unwrap().push(value);
+
+            Ok(())
+        }
+
+        fn write_null(&self, path: &str) -> Result<()> {
+            let value = format!("{} => Null()", path);
+            self.buffer.lock().unwrap().push(value);
+
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_print_object() {
+        let writer = TestWriter::new();
+
+        let mut map = Map::new();
+        map.insert("foo".to_string(), Value::String("bar".to_string()));
+        map.insert("baz".to_string(), Value::Null);
+
+        print_value(".", Value::Object(map), &writer).unwrap();
+
+        let mut values = writer.buffer.lock().unwrap();
+        values.sort();
+
+        assert_eq!(*values, vec![".baz => Null()", ".foo => String(bar)"]);
+    }
+
+    #[test]
+    fn test_print_array() {
+        let writer = TestWriter::new();
+
+        let arr = vec![
+            Value::String("foo".to_string()),
+            Value::Number(Number::from(0)),
+            Value::Bool(true),
+        ];
+
+        print_value(".", Value::Array(arr), &writer).unwrap();
+
+        assert_eq!(
+            *writer.buffer.lock().unwrap(),
+            vec![
+                ".[0] => String(foo)",
+                ".[1] => Number(0)",
+                ".[2] => Bool(true)"
+            ]
+        );
+    }
+
+    #[test]
+    fn test_print_str() {
+        let writer = TestWriter::new();
+
+        print_value("foo", Value::String("bar".to_string()), &writer).unwrap();
+
+        assert_eq!(*writer.buffer.lock().unwrap(), vec!["foo => String(bar)"]);
+    }
+
+    #[test]
+    fn test_print_number() {
+        let writer = TestWriter::new();
+
+        print_value("foo", Value::Number(Number::from(69)), &writer).unwrap();
+
+        assert_eq!(*writer.buffer.lock().unwrap(), vec!["foo => Number(69)"]);
+    }
+
+    #[test]
+    fn test_print_bool() {
+        let writer = TestWriter::new();
+
+        print_value("foo", Value::Bool(true), &writer).unwrap();
+
+        assert_eq!(*writer.buffer.lock().unwrap(), vec!["foo => Bool(true)"]);
+    }
+
+    #[test]
+    fn test_print_null() {
+        let writer = TestWriter::new();
+
+        print_value("foo", Value::Null, &writer).unwrap();
+
+        assert_eq!(*writer.buffer.lock().unwrap(), vec!["foo => Null()"]);
+    }
+
+    #[test]
+    fn test_print_complex() {
+        let writer = TestWriter::new();
+
+        let data = r#"
+        {
+            "first name": "John",
+            "last name": "Doe",
+            "age": 43,
+            "address": {
+                "street": "10 Downing Street",
+                "city": "London"
+            },
+            "phones": [
+                "+44 1234567",
+                "+44 2345678"
+            ]
+        }"#;
+
+        let value: Value = serde_json::from_str(data).unwrap();
+
+        print_value(".", value, &writer).unwrap();
+
+        let mut values = writer.buffer.lock().unwrap();
+        values.sort();
+
+        assert_eq!(
+            *values,
+            vec![
+                r#"."first name" => String(John)"#,
+                r#"."last name" => String(Doe)"#,
+                ".address.city => String(London)",
+                ".address.street => String(10 Downing Street)",
+                ".age => Number(43)",
+                ".phones[0] => String(+44 1234567)",
+                ".phones[1] => String(+44 2345678)",
+            ]
+        );
+    }
+}
+
+#[cfg(test)]
+mod test_escape_path_element {
+    use super::escape_path_element;
+
+    #[test]
+    fn test_nothing_to_escape() {
+        assert_eq!(escape_path_element("foo".to_string()), "foo");
+    }
+
+    #[test]
+    fn test_wrap_strings_with_non_alnum_chars_in_double_quotes() {
+        assert_eq!(
+            escape_path_element("Mathieu Lemay [0]".to_string()),
+            "\"Mathieu Lemay [0]\""
+        );
+    }
+
+    #[test]
+    fn test_test_escape_double_quotes() {
+        assert_eq!(
+            escape_path_element("Mathieu \"Uncle Matt\" Lemay".to_string()),
+            r#""Mathieu \"Uncle Matt\" Lemay""#
+        );
+    }
 }
