@@ -1,8 +1,19 @@
+use crate::error::Result;
 use clap::{App, Arg};
 use serde_json::{Number, Value};
+use std::ffi::OsStr;
 use std::fs::File;
-use std::io::{stdin, BufReader, Read, Result, Write};
+use std::io::{stdin, BufReader, Read, Write};
+use std::path::Path;
 use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
+
+mod error;
+
+#[derive(Debug, PartialEq, Eq)]
+enum InputDataType {
+    Json,
+    Yaml,
+}
 
 fn get_reader(filename: &str) -> Box<dyn Read> {
     if filename == "-" {
@@ -11,6 +22,34 @@ fn get_reader(filename: &str) -> Box<dyn Read> {
         let f = File::open(filename).expect("Error reading file");
         Box::new(BufReader::new(f))
     }
+}
+
+fn get_extension_from_filename(filename: &str) -> Option<&str> {
+    Path::new(filename).extension().and_then(OsStr::to_str)
+}
+
+fn detect_data_type(filename: &str, data_type: &str) -> InputDataType {
+    match data_type {
+        "json" => InputDataType::Json,
+        "yaml" => InputDataType::Yaml,
+        _ => match get_extension_from_filename(filename) {
+            Some("json") => InputDataType::Json,
+            Some("yaml") => InputDataType::Yaml,
+            Some("yml") => InputDataType::Yaml,
+            _ => InputDataType::Json,
+        },
+    }
+}
+
+fn parse_input_data(filename: &str, data_type: InputDataType) -> Result<Value> {
+    let rd = get_reader(filename);
+
+    let val = match data_type {
+        InputDataType::Json => serde_json::from_reader(rd)?,
+        InputDataType::Yaml => serde_yaml::from_reader(rd)?,
+    };
+
+    Ok(val)
 }
 
 trait EntryWriter {
@@ -177,25 +216,35 @@ fn main() -> Result<()> {
                 .default_value("auto")
                 .possible_values(&["always", "auto", "never"])
         )
+        .arg(
+            Arg::with_name("type")
+                .short("-t")
+                .long("--type")
+                .help("Specify input data type. Auto detect if not specified")
+                .takes_value(true)
+                .default_value("auto")
+                .possible_values(&["auto", "json", "yaml"])
+        )
         .get_matches();
 
     let filename = matches.value_of("file").unwrap();
     let color = matches.value_of("color").unwrap();
+    let data_type = matches.value_of("type").unwrap();
+
+    let data_type = detect_data_type(filename, data_type);
+    let data = parse_input_data(filename, data_type)?;
 
     let writer = get_writer(color);
 
-    let rd = get_reader(filename);
-    let v: Value = serde_json::from_reader(rd)?;
-
-    print_value(".", v, &(*writer))
+    print_value(".", data, &(*writer))
 }
 
 #[cfg(test)]
 mod test_print_value {
     use super::{print_value, EntryWriter};
 
+    use crate::error::Result;
     use serde_json::{Map, Number, Value};
-    use std::io::Result;
     use std::sync::Mutex;
 
     struct TestWriter {
@@ -378,5 +427,78 @@ mod test_escape_path_element {
             escape_path_element("Mathieu \"Uncle Matt\" Lemay".to_string()),
             r#""Mathieu \"Uncle Matt\" Lemay""#
         );
+    }
+}
+
+#[cfg(test)]
+mod test_get_extension_from_filename {
+    use super::get_extension_from_filename;
+
+    #[test]
+    fn test_empty_string_returns_none() {
+        assert_eq!(get_extension_from_filename(""), None);
+    }
+
+    #[test]
+    fn test_file_with_no_extension_returns_none() {
+        assert_eq!(get_extension_from_filename("Dockerfile"), None);
+    }
+
+    #[test]
+    fn test_file_with_single_extension_returns_the_extension() {
+        assert_eq!(get_extension_from_filename("file.json"), Some("json"));
+    }
+
+    #[test]
+    fn test_file_with_multiple_extensions_returns_the_first_extension() {
+        assert_eq!(get_extension_from_filename("file.tar.gz"), Some("gz"));
+    }
+
+    #[test]
+    fn test_file_with_full_path_returns_the_extension() {
+        assert_eq!(
+            get_extension_from_filename("/some/file/with/full/path.json"),
+            Some("json")
+        );
+    }
+}
+
+#[cfg(test)]
+mod test_detect_data_type {
+    use super::{detect_data_type, InputDataType};
+
+    #[test]
+    fn test_forcing_json_returns_json_type() {
+        assert_eq!(detect_data_type("file.yaml", "json"), InputDataType::Json);
+    }
+
+    #[test]
+    fn test_forcing_yaml_returns_yaml_type() {
+        assert_eq!(detect_data_type("file.json", "yaml"), InputDataType::Yaml);
+    }
+
+    #[test]
+    fn test_file_with_json_extension_returns_json_type() {
+        assert_eq!(detect_data_type("file.json", "auto"), InputDataType::Json);
+    }
+
+    #[test]
+    fn test_file_with_yaml_extension_returns_yaml_type() {
+        assert_eq!(detect_data_type("file.yaml", "auto"), InputDataType::Yaml);
+    }
+
+    #[test]
+    fn test_file_with_yml_extension_returns_yaml_type() {
+        assert_eq!(detect_data_type("file.yml", "auto"), InputDataType::Yaml);
+    }
+
+    #[test]
+    fn test_file_with_any_unknown_extension_returns_json_type() {
+        assert_eq!(detect_data_type("file.foo", "auto"), InputDataType::Json);
+    }
+
+    #[test]
+    fn test_file_with_no_extension_returns_json_type() {
+        assert_eq!(detect_data_type("-", "auto"), InputDataType::Json);
     }
 }
