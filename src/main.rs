@@ -1,11 +1,13 @@
-use crate::error::Result;
-use clap::{App, Arg};
-use serde_json::{Number, Value};
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{stdin, BufReader, Read, Write};
 use std::path::Path;
+
+use clap::{App, Arg};
+use serde_json::{Number, Value};
 use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
+
+use crate::error::Result;
 
 mod error;
 
@@ -76,6 +78,12 @@ trait EntryWriter {
 
         Ok(())
     }
+
+    fn write_raw(&self, path: &str, value: &str) -> Result<()> {
+        println!("{} => {}", path, value);
+
+        Ok(())
+    }
 }
 
 struct DefaultWriter {}
@@ -136,6 +144,10 @@ impl EntryWriter for ColoredWriter {
     fn write_null(&self, path: &str) -> Result<()> {
         self._write_value(path, "null", Some(Color::Black), true)
     }
+
+    fn write_raw(&self, path: &str, value: &str) -> Result<()> {
+        self._write_value(path, value, None, true)
+    }
 }
 
 fn get_writer(color: &str) -> Box<dyn EntryWriter> {
@@ -166,25 +178,26 @@ fn escape_path_element(p: String) -> String {
 fn print_value(path: &str, value: Value, writer: &dyn EntryWriter) -> Result<()> {
     match value {
         Value::Object(o) => {
-            for (k, v) in o {
-                print_value(
-                    &format!(
-                        "{}{}{}",
-                        path,
-                        if path.ends_with('.') { "" } else { "." },
-                        escape_path_element(k)
-                    ),
-                    v,
-                    writer,
-                )?
-            }
+            if !o.is_empty() {
+                let prefix = format!("{}{}", path, if path.ends_with('.') { "" } else { "." });
+
+                for (k, v) in o {
+                    print_value(&format!("{}{}", prefix, escape_path_element(k)), v, writer)?
+                }
+            } else {
+                writer.write_raw(path, "{}")?
+            };
 
             Ok(())
         }
         Value::Array(a) => {
-            for (i, v) in a.into_iter().enumerate() {
-                print_value(&format!("{}[{}]", path, i), v, writer)?
-            }
+            if !a.is_empty() {
+                for (i, v) in a.into_iter().enumerate() {
+                    print_value(&format!("{}[{}]", path, i), v, writer)?
+                }
+            } else {
+                writer.write_raw(path, "[]")?
+            };
 
             Ok(())
         }
@@ -241,11 +254,13 @@ fn main() -> Result<()> {
 
 #[cfg(test)]
 mod test_print_value {
-    use super::{print_value, EntryWriter};
+    use std::sync::Mutex;
+
+    use serde_json::{Map, Number, Value};
 
     use crate::error::Result;
-    use serde_json::{Map, Number, Value};
-    use std::sync::Mutex;
+
+    use super::{print_value, EntryWriter};
 
     struct TestWriter {
         buffer: Mutex<Vec<String>>,
@@ -283,6 +298,13 @@ mod test_print_value {
 
         fn write_null(&self, path: &str) -> Result<()> {
             let value = format!("{} => Null()", path);
+            self.buffer.lock().unwrap().push(value);
+
+            Ok(())
+        }
+
+        fn write_raw(&self, path: &str, value: &str) -> Result<()> {
+            let value = format!("{} => Raw({})", path, value);
             self.buffer.lock().unwrap().push(value);
 
             Ok(())
@@ -401,6 +423,26 @@ mod test_print_value {
                 ".phones[1] => String(+44 2345678)",
             ]
         );
+    }
+
+    #[test]
+    fn test_empty_dicts_and_arrays_are_output() {
+        let writer = TestWriter::new();
+
+        let data = r#"
+        {
+            "address": {},
+            "phones": []
+        }"#;
+
+        let value: Value = serde_json::from_str(data).unwrap();
+
+        print_value(".", value, &writer).unwrap();
+
+        let mut values = writer.buffer.lock().unwrap();
+        values.sort();
+
+        assert_eq!(*values, vec![".address => Raw({})", ".phones => Raw([])"]);
     }
 }
 
