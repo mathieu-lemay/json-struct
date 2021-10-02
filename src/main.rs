@@ -11,6 +11,10 @@ use crate::error::Result;
 
 mod error;
 
+mod built_info {
+    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
+
 #[derive(Debug, PartialEq, Eq)]
 enum InputDataType {
     Json,
@@ -209,10 +213,15 @@ fn print_value(path: &str, value: Value, writer: &dyn EntryWriter) -> Result<()>
 }
 
 fn main() -> Result<()> {
-    let matches = App::new("JSON Struct")
-        .version("0.1.0")
-        .author("Mathieu Lemay <acidrain1@gmail.com>")
-        .about("Shows the full struct of a json file")
+    let version = match (built_info::GIT_VERSION, built_info::GIT_DIRTY) {
+        (Some(v), Some(dirty)) => format!("{}{}", v, if dirty { "-dirty" } else { "" }),
+        _ => format!("v{}", built_info::PKG_VERSION),
+    };
+
+    let matches = App::new(built_info::PKG_NAME)
+        .version(version.as_str())
+        .author(built_info::PKG_AUTHORS)
+        .about(built_info::PKG_DESCRIPTION)
         .arg(
             Arg::with_name("file")
                 .help("File to read. Use '-' for stdin.")
