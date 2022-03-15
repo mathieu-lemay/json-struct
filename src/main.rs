@@ -170,7 +170,7 @@ fn get_writer(color: &str) -> Box<dyn EntryWriter> {
 }
 
 fn escape_path_element(p: String) -> String {
-    let p = p.replace("\"", "\\\"");
+    let p = p.replace('"', "\\\"");
 
     if p.chars().any(|c| !c.is_digit(36)) {
         format!("\"{}\"", p)
