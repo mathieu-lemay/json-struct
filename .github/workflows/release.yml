@@ -1,13 +1,17 @@
 # References:
 # https://eugene-babichenko.github.io/blog/2020/05/09/github-actions-cross-platform-auto-releases/
 # https://github.com/BurntSushi/ripgrep/blob/master/.github/workflows/release.yml
+# https://github.com/casey/just/blob/master/.github/workflows/release.yaml
 
-name: release
+name: Release
 
 on:
   push:
     tags:
       - "v[0-9]+.*"
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   create-release:
@@ -33,14 +37,28 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        build: [linux, macos]
+        target:
+          - aarch64-apple-darwin
+          - aarch64-unknown-linux-musl
+          - armv7-unknown-linux-musleabihf
+          - x86_64-apple-darwin
+          - x86_64-unknown-linux-musl
         include:
-        - build: linux
-          os: ubuntu-latest
-          target: x86_64-unknown-linux-musl
-        - build: macos
-          os: macos-latest
-          target: x86_64-apple-darwin
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            target_rustflags: ''
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            target_rustflags: '--codegen linker=aarch64-linux-gnu-gcc'
+          - target: armv7-unknown-linux-musleabihf
+            os: ubuntu-latest
+            target_rustflags: '--codegen linker=arm-linux-gnueabihf-gcc'
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            target_rustflags: ''
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            target_rustflags: ''
 
     steps:
     - name: Checkout repository
@@ -53,14 +71,22 @@ jobs:
       with:
         toolchain: stable
         target: ${{ matrix.target }}
-        profile: minimal
         override: true
 
-    - name: Build binary
-      run: cargo build --verbose --release --target=${{ matrix.target }}
+    - name: Install AArch64 Toolchain
+      if: ${{ matrix.target == 'aarch64-unknown-linux-musl' }}
+      run: |
+        sudo apt-get update
+        sudo apt-get install gcc-aarch64-linux-gnu
 
-    - name: Strip binary
-      run: strip "target/${{ matrix.target }}/release/json-struct"
+    - name: Install ARM7 Toolchain
+      if: ${{ matrix.target == 'armv7-unknown-linux-musleabihf' }}
+      run: |
+        sudo apt-get update
+        sudo apt-get install gcc-arm-linux-gnueabihf
+
+    - name: Build binary
+      run: RUSTFLAGS="${RUSTFLAGS} ${{ matrix.target_rustflags }}" cargo build --verbose --release --target=${{ matrix.target }}
 
     - name: Create tarball
       run: tar zcf "json-struct.tar.gz" -C "target/${{ matrix.target }}/release" json-struct
@@ -71,7 +97,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ needs.create-release.outputs.upload_url }}
-        asset_name: json-struct-${{ matrix.build }}.tar.gz
+        asset_name: json-struct-${{ matrix.target }}.tar.gz
         asset_path: ./json-struct.tar.gz
         asset_content_type: application/gzip
 
