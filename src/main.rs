@@ -1,9 +1,10 @@
 use std::ffi::OsStr;
 use std::fs::File;
-use std::io::{stdin, BufReader, Read, Write};
+use std::io::{self, stdin, BufReader, Read, Write};
 use std::path::Path;
 
-use clap::{ArgEnum, Parser};
+use clap::{ArgEnum, CommandFactory, Parser};
+use clap_complete::{generate, Shell};
 use serde_json::{Number, Value};
 use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 
@@ -244,10 +245,23 @@ struct Args {
         default_value = "auto"
     )]
     color: CmdColor,
+
+    #[clap(long, arg_enum, help = "Generate completion for a shell")]
+    completion: Option<Shell>,
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
+
+    if let Some(shell) = args.completion {
+        generate(
+            shell,
+            &mut Args::command(),
+            "json-struct",
+            &mut io::stdout(),
+        );
+        return Ok(());
+    }
 
     let data_type = detect_data_type(&args.file, args.data_type);
     let data = parse_input_data(&args.file, data_type)?;
