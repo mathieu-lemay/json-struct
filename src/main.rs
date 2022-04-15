@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::{stdin, BufReader, Read, Write};
 use std::path::Path;
 
-use clap::{App, Arg};
+use clap::{ArgEnum, Parser};
 use serde_json::{Number, Value};
 use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 
@@ -11,14 +11,24 @@ use crate::error::Result;
 
 mod error;
 
-mod built_info {
-    include!(concat!(env!("OUT_DIR"), "/built.rs"));
-}
-
 #[derive(Debug, PartialEq, Eq)]
 enum InputDataType {
     Json,
     Yaml,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, ArgEnum)]
+enum CmdDataType {
+    Auto,
+    Json,
+    Yaml,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, ArgEnum)]
+enum CmdColor {
+    Auto,
+    Always,
+    Never,
 }
 
 fn get_reader(filename: &str) -> Box<dyn Read> {
@@ -34,10 +44,10 @@ fn get_extension_from_filename(filename: &str) -> Option<&str> {
     Path::new(filename).extension().and_then(OsStr::to_str)
 }
 
-fn detect_data_type(filename: &str, data_type: &str) -> InputDataType {
+fn detect_data_type(filename: &str, data_type: CmdDataType) -> InputDataType {
     match data_type {
-        "json" => InputDataType::Json,
-        "yaml" => InputDataType::Yaml,
+        CmdDataType::Json => InputDataType::Json,
+        CmdDataType::Yaml => InputDataType::Yaml,
         _ => match get_extension_from_filename(filename) {
             Some("json") => InputDataType::Json,
             Some("yaml") => InputDataType::Yaml,
@@ -154,18 +164,17 @@ impl EntryWriter for ColoredWriter {
     }
 }
 
-fn get_writer(color: &str) -> Box<dyn EntryWriter> {
+fn get_writer(color: CmdColor) -> Box<dyn EntryWriter> {
     match color {
-        "always" => Box::new(ColoredWriter::new(ColorChoice::Always)),
-        "auto" => {
+        CmdColor::Auto => {
             if atty::is(atty::Stream::Stdout) {
                 Box::new(ColoredWriter::new(ColorChoice::Auto))
             } else {
                 Box::new(DefaultWriter::new())
             }
         }
-        "never" => Box::new(DefaultWriter::new()),
-        _ => panic!("Unexpected value for color: {}", color),
+        CmdColor::Always => Box::new(ColoredWriter::new(ColorChoice::Always)),
+        CmdColor::Never => Box::new(DefaultWriter::new()),
     }
 }
 
@@ -212,51 +221,37 @@ fn print_value(path: &str, value: Value, writer: &dyn EntryWriter) -> Result<()>
     }
 }
 
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+    #[clap(help = "File to read. Use '-' for stdin.", default_value = "-")]
+    file: String,
+
+    #[clap(
+        short = 't',
+        long = "type",
+        arg_enum,
+        help = "Specify input data type. Auto detect if not specified",
+        default_value = "auto"
+    )]
+    data_type: CmdDataType,
+
+    #[clap(
+        short,
+        long,
+        arg_enum,
+        help = "Colorize the output",
+        default_value = "auto"
+    )]
+    color: CmdColor,
+}
+
 fn main() -> Result<()> {
-    let version = match (built_info::GIT_VERSION, built_info::GIT_DIRTY) {
-        (Some(v), Some(dirty)) => format!("{}{}", v, if dirty { "-dirty" } else { "" }),
-        _ => format!("v{}", built_info::PKG_VERSION),
-    };
+    let args = Args::parse();
 
-    let matches = App::new(built_info::PKG_NAME)
-        .version(version.as_str())
-        .author(built_info::PKG_AUTHORS)
-        .about(built_info::PKG_DESCRIPTION)
-        .arg(
-            Arg::with_name("file")
-                .help("File to read. Use '-' for stdin.")
-                .required(true)
-                .default_value("-")
-                .index(1),
-        )
-        .arg(
-            Arg::with_name("color")
-                .short("-c")
-                .long("--color")
-                .help("colorize the output; <color> can be 'always' (default if omitted), 'auto', or 'never'")
-                .takes_value(true)
-                .default_value("auto")
-                .possible_values(&["always", "auto", "never"])
-        )
-        .arg(
-            Arg::with_name("type")
-                .short("-t")
-                .long("--type")
-                .help("Specify input data type. Auto detect if not specified")
-                .takes_value(true)
-                .default_value("auto")
-                .possible_values(&["auto", "json", "yaml"])
-        )
-        .get_matches();
-
-    let filename = matches.value_of("file").unwrap();
-    let color = matches.value_of("color").unwrap();
-    let data_type = matches.value_of("type").unwrap();
-
-    let data_type = detect_data_type(filename, data_type);
-    let data = parse_input_data(filename, data_type)?;
-
-    let writer = get_writer(color);
+    let data_type = detect_data_type(&args.file, args.data_type);
+    let data = parse_input_data(&args.file, data_type)?;
+    let writer = get_writer(args.color);
 
     print_value(".", data, &(*writer))
 }
@@ -516,40 +511,63 @@ mod test_get_extension_from_filename {
 
 #[cfg(test)]
 mod test_detect_data_type {
+    use crate::CmdDataType;
+
     use super::{detect_data_type, InputDataType};
 
     #[test]
     fn test_forcing_json_returns_json_type() {
-        assert_eq!(detect_data_type("file.yaml", "json"), InputDataType::Json);
+        assert_eq!(
+            detect_data_type("file.yaml", CmdDataType::Json),
+            InputDataType::Json
+        );
     }
 
     #[test]
     fn test_forcing_yaml_returns_yaml_type() {
-        assert_eq!(detect_data_type("file.json", "yaml"), InputDataType::Yaml);
+        assert_eq!(
+            detect_data_type("file.json", CmdDataType::Yaml),
+            InputDataType::Yaml
+        );
     }
 
     #[test]
     fn test_file_with_json_extension_returns_json_type() {
-        assert_eq!(detect_data_type("file.json", "auto"), InputDataType::Json);
+        assert_eq!(
+            detect_data_type("file.json", CmdDataType::Auto),
+            InputDataType::Json
+        );
     }
 
     #[test]
     fn test_file_with_yaml_extension_returns_yaml_type() {
-        assert_eq!(detect_data_type("file.yaml", "auto"), InputDataType::Yaml);
+        assert_eq!(
+            detect_data_type("file.yaml", CmdDataType::Auto),
+            InputDataType::Yaml
+        );
     }
 
     #[test]
     fn test_file_with_yml_extension_returns_yaml_type() {
-        assert_eq!(detect_data_type("file.yml", "auto"), InputDataType::Yaml);
+        assert_eq!(
+            detect_data_type("file.yml", CmdDataType::Auto),
+            InputDataType::Yaml
+        );
     }
 
     #[test]
     fn test_file_with_any_unknown_extension_returns_json_type() {
-        assert_eq!(detect_data_type("file.foo", "auto"), InputDataType::Json);
+        assert_eq!(
+            detect_data_type("file.foo", CmdDataType::Auto),
+            InputDataType::Json
+        );
     }
 
     #[test]
     fn test_file_with_no_extension_returns_json_type() {
-        assert_eq!(detect_data_type("-", "auto"), InputDataType::Json);
+        assert_eq!(
+            detect_data_type("-", CmdDataType::Auto),
+            InputDataType::Json
+        );
     }
 }
