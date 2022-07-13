@@ -2,11 +2,12 @@ use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{self, stdin, BufReader, Read, Write};
 use std::path::Path;
+use std::str;
 
 use clap::{ArgEnum, CommandFactory, Parser};
 use clap_complete::{generate, Shell};
 use serde_json::{Number, Value};
-use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
+use termcolor::{Buffer, BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 
 use crate::error::Result;
 
@@ -70,118 +71,132 @@ fn parse_input_data(filename: &str, data_type: InputDataType) -> Result<Value> {
 }
 
 trait EntryWriter {
-    fn write_string(&self, path: &str, value: &str) -> Result<()> {
-        println!("{} => {}", path, value.replace('\n', "\\n"));
-
-        Ok(())
-    }
-
-    fn write_number(&self, path: &str, value: &Number) -> Result<()> {
-        println!("{} => {}", path, value);
-
-        Ok(())
-    }
-
-    fn write_bool(&self, path: &str, value: bool) -> Result<()> {
-        println!("{} => {}", path, value);
-
-        Ok(())
-    }
-
-    fn write_null(&self, path: &str) -> Result<()> {
-        println!("{} => null", path);
-
-        Ok(())
-    }
-
-    fn write_raw(&self, path: &str, value: &str) -> Result<()> {
-        println!("{} => {}", path, value);
-
-        Ok(())
-    }
+    fn write_string(&mut self, path: &str, value: &str) -> Result<()>;
+    fn write_number(&mut self, path: &str, value: &Number) -> Result<()>;
+    fn write_bool(&mut self, path: &str, value: bool) -> Result<()>;
+    fn write_null(&mut self, path: &str) -> Result<()>;
+    fn write_raw(&mut self, path: &str, value: &str) -> Result<()>;
 }
 
-struct DefaultWriter {}
-impl DefaultWriter {
-    fn new() -> Self {
-        Self {}
-    }
-}
-impl EntryWriter for DefaultWriter {}
-
-struct ColoredWriter {
-    writer: BufferWriter,
+struct DefaultWriter<'a> {
+    writer: &'a mut dyn Write,
 }
 
-impl ColoredWriter {
-    fn new(color_choice: ColorChoice) -> Self {
-        let writer = BufferWriter::stdout(color_choice);
+impl<'a> DefaultWriter<'a> {
+    fn new(writer: &'a mut dyn Write) -> Self {
         Self { writer }
+    }
+}
+
+impl<'a> EntryWriter for DefaultWriter<'a> {
+    fn write_string(&mut self, path: &str, value: &str) -> Result<()> {
+        writeln!(self.writer, "{} => {}", path, &escape_str_value(value))?;
+
+        Ok(())
+    }
+
+    fn write_number(&mut self, path: &str, value: &Number) -> Result<()> {
+        writeln!(self.writer, "{} => {}", path, value)?;
+
+        Ok(())
+    }
+
+    fn write_bool(&mut self, path: &str, value: bool) -> Result<()> {
+        writeln!(self.writer, "{} => {}", path, value)?;
+
+        Ok(())
+    }
+
+    fn write_null(&mut self, path: &str) -> Result<()> {
+        writeln!(self.writer, "{} => null", path)?;
+
+        Ok(())
+    }
+
+    fn write_raw(&mut self, path: &str, value: &str) -> Result<()> {
+        writeln!(self.writer, "{} => {}", path, value)?;
+
+        Ok(())
+    }
+}
+
+struct ColoredWriter<'a> {
+    writer: &'a mut dyn Write,
+    buffer: Buffer,
+}
+
+impl<'a> ColoredWriter<'a> {
+    fn new(writer: &'a mut dyn Write, color_choice: ColorChoice) -> Self {
+        let buffer = BufferWriter::stdout(color_choice).buffer();
+        Self { writer, buffer }
     }
 
     fn _write_value(
-        &self,
+        &mut self,
         path: &str,
         value: &str,
         color: Option<Color>,
         bold: bool,
     ) -> Result<()> {
-        let mut buffer = self.writer.buffer();
+        self.buffer
+            .set_color(ColorSpec::new().set_fg(Some(Color::Blue)))?;
+        write!(&mut self.buffer, "{}", path)?;
+        self.buffer.reset()?;
 
-        buffer.set_color(ColorSpec::new().set_fg(Some(Color::Blue)))?;
-        write!(&mut buffer, "{}", path)?;
+        write!(&mut self.buffer, " => ")?;
 
-        buffer.reset()?;
-        write!(&mut buffer, " => ")?;
+        self.buffer
+            .set_color(ColorSpec::new().set_fg(color).set_bold(bold))?;
+        writeln!(&mut self.buffer, "{}", value)?;
+        self.buffer.reset()?;
 
-        buffer.set_color(ColorSpec::new().set_fg(color).set_bold(bold))?;
-        writeln!(&mut buffer, "{}", value)?;
-
-        self.writer.print(&buffer)?;
+        let value = str::from_utf8(self.buffer.as_slice())?;
+        write!(self.writer, "{}", value)?;
+        self.buffer.clear();
 
         Ok(())
     }
 }
 
-impl EntryWriter for ColoredWriter {
-    fn write_string(&self, path: &str, value: &str) -> Result<()> {
-        self._write_value(
-            path,
-            &format!("\"{}\"", value.replace('\n', "\\n")),
-            Some(Color::Green),
-            false,
-        )
+impl<'a> EntryWriter for ColoredWriter<'a> {
+    fn write_string(&mut self, path: &str, value: &str) -> Result<()> {
+        self._write_value(path, &escape_str_value(value), Some(Color::Green), false)
     }
 
-    fn write_number(&self, path: &str, value: &Number) -> Result<()> {
+    fn write_number(&mut self, path: &str, value: &Number) -> Result<()> {
         self._write_value(path, &value.to_string(), None, false)
     }
 
-    fn write_bool(&self, path: &str, value: bool) -> Result<()> {
+    fn write_bool(&mut self, path: &str, value: bool) -> Result<()> {
         self._write_value(path, &value.to_string(), None, false)
     }
 
-    fn write_null(&self, path: &str) -> Result<()> {
+    fn write_null(&mut self, path: &str) -> Result<()> {
         self._write_value(path, "null", Some(Color::Black), true)
     }
 
-    fn write_raw(&self, path: &str, value: &str) -> Result<()> {
+    fn write_raw(&mut self, path: &str, value: &str) -> Result<()> {
         self._write_value(path, value, None, true)
     }
 }
 
-fn get_writer(color: CmdColor) -> Box<dyn EntryWriter> {
+fn get_writer<'a>(writer: &'a mut dyn Write, color: CmdColor) -> Box<dyn EntryWriter + 'a> {
     match color {
         CmdColor::Auto => {
             if atty::is(atty::Stream::Stdout) {
-                Box::new(ColoredWriter::new(ColorChoice::Auto))
+                Box::new(ColoredWriter::new(writer, ColorChoice::Auto))
             } else {
-                Box::new(DefaultWriter::new())
+                Box::new(DefaultWriter::new(writer))
             }
         }
-        CmdColor::Always => Box::new(ColoredWriter::new(ColorChoice::Always)),
-        CmdColor::Never => Box::new(DefaultWriter::new()),
+        CmdColor::Always => Box::new(ColoredWriter::new(writer, ColorChoice::Always)),
+        CmdColor::Never => Box::new(DefaultWriter::new(writer)),
     }
+    // Box::new(DefaultWriter::new(writer))
+}
+
+fn escape_str_value(value: &str) -> String {
+    format!("\"{}\"", value.replace('\n', "\\n"))
 }
 
 fn escape_path_element(p: String) -> String {
@@ -194,7 +209,7 @@ fn escape_path_element(p: String) -> String {
     }
 }
 
-fn print_value(path: &str, value: Value, writer: &dyn EntryWriter) -> Result<()> {
+fn print_value(path: &str, value: Value, writer: &mut dyn EntryWriter) -> Result<()> {
     match value {
         Value::Object(o) => {
             if !o.is_empty() {
@@ -270,9 +285,10 @@ fn main() -> Result<()> {
 
     let data_type = detect_data_type(&args.file, args.data_type);
     let data = parse_input_data(&args.file, data_type)?;
-    let writer = get_writer(args.color);
+    let mut writer = io::stdout();
+    let mut writer = get_writer(&mut writer, args.color);
 
-    print_value(".", data, &(*writer))
+    print_value(".", data, &mut (*writer))
 }
 
 #[cfg(test)]
@@ -298,35 +314,35 @@ mod test_print_value {
     }
 
     impl EntryWriter for TestWriter {
-        fn write_string(&self, path: &str, value: &str) -> Result<()> {
+        fn write_string(&mut self, path: &str, value: &str) -> Result<()> {
             let value = format!("{} => String({})", path, value);
             self.buffer.lock().unwrap().push(value);
 
             Ok(())
         }
 
-        fn write_number(&self, path: &str, value: &Number) -> Result<()> {
+        fn write_number(&mut self, path: &str, value: &Number) -> Result<()> {
             let value = format!("{} => Number({})", path, value);
             self.buffer.lock().unwrap().push(value);
 
             Ok(())
         }
 
-        fn write_bool(&self, path: &str, value: bool) -> Result<()> {
+        fn write_bool(&mut self, path: &str, value: bool) -> Result<()> {
             let value = format!("{} => Bool({})", path, value);
             self.buffer.lock().unwrap().push(value);
 
             Ok(())
         }
 
-        fn write_null(&self, path: &str) -> Result<()> {
+        fn write_null(&mut self, path: &str) -> Result<()> {
             let value = format!("{} => Null()", path);
             self.buffer.lock().unwrap().push(value);
 
             Ok(())
         }
 
-        fn write_raw(&self, path: &str, value: &str) -> Result<()> {
+        fn write_raw(&mut self, path: &str, value: &str) -> Result<()> {
             let value = format!("{} => Raw({})", path, value);
             self.buffer.lock().unwrap().push(value);
 
@@ -336,13 +352,13 @@ mod test_print_value {
 
     #[test]
     fn test_print_object() {
-        let writer = TestWriter::new();
+        let mut writer = TestWriter::new();
 
         let mut map = Map::new();
         map.insert("foo".to_string(), Value::String("bar".to_string()));
         map.insert("baz".to_string(), Value::Null);
 
-        print_value(".", Value::Object(map), &writer).unwrap();
+        print_value(".", Value::Object(map), &mut writer).unwrap();
 
         let mut values = writer.buffer.lock().unwrap();
         values.sort();
@@ -352,7 +368,7 @@ mod test_print_value {
 
     #[test]
     fn test_print_array() {
-        let writer = TestWriter::new();
+        let mut writer = TestWriter::new();
 
         let arr = vec![
             Value::String("foo".to_string()),
@@ -360,7 +376,7 @@ mod test_print_value {
             Value::Bool(true),
         ];
 
-        print_value(".", Value::Array(arr), &writer).unwrap();
+        print_value(".", Value::Array(arr), &mut writer).unwrap();
 
         assert_eq!(
             *writer.buffer.lock().unwrap(),
@@ -374,43 +390,43 @@ mod test_print_value {
 
     #[test]
     fn test_print_str() {
-        let writer = TestWriter::new();
+        let mut writer = TestWriter::new();
 
-        print_value("foo", Value::String("bar".to_string()), &writer).unwrap();
+        print_value("foo", Value::String("bar".to_string()), &mut writer).unwrap();
 
         assert_eq!(*writer.buffer.lock().unwrap(), vec!["foo => String(bar)"]);
     }
 
     #[test]
     fn test_print_number() {
-        let writer = TestWriter::new();
+        let mut writer = TestWriter::new();
 
-        print_value("foo", Value::Number(Number::from(69)), &writer).unwrap();
+        print_value("foo", Value::Number(Number::from(69)), &mut writer).unwrap();
 
         assert_eq!(*writer.buffer.lock().unwrap(), vec!["foo => Number(69)"]);
     }
 
     #[test]
     fn test_print_bool() {
-        let writer = TestWriter::new();
+        let mut writer = TestWriter::new();
 
-        print_value("foo", Value::Bool(true), &writer).unwrap();
+        print_value("foo", Value::Bool(true), &mut writer).unwrap();
 
         assert_eq!(*writer.buffer.lock().unwrap(), vec!["foo => Bool(true)"]);
     }
 
     #[test]
     fn test_print_null() {
-        let writer = TestWriter::new();
+        let mut writer = TestWriter::new();
 
-        print_value("foo", Value::Null, &writer).unwrap();
+        print_value("foo", Value::Null, &mut writer).unwrap();
 
         assert_eq!(*writer.buffer.lock().unwrap(), vec!["foo => Null()"]);
     }
 
     #[test]
     fn test_print_complex() {
-        let writer = TestWriter::new();
+        let mut writer = TestWriter::new();
 
         let data = r#"
         {
@@ -429,7 +445,7 @@ mod test_print_value {
 
         let value: Value = serde_json::from_str(data).unwrap();
 
-        print_value(".", value, &writer).unwrap();
+        print_value(".", value, &mut writer).unwrap();
 
         let mut values = writer.buffer.lock().unwrap();
         values.sort();
@@ -450,7 +466,7 @@ mod test_print_value {
 
     #[test]
     fn test_empty_dicts_and_arrays_are_output() {
-        let writer = TestWriter::new();
+        let mut writer = TestWriter::new();
 
         let data = r#"
         {
@@ -460,12 +476,224 @@ mod test_print_value {
 
         let value: Value = serde_json::from_str(data).unwrap();
 
-        print_value(".", value, &writer).unwrap();
+        print_value(".", value, &mut writer).unwrap();
 
         let mut values = writer.buffer.lock().unwrap();
         values.sort();
 
         assert_eq!(*values, vec![".address => Raw({})", ".phones => Raw([])"]);
+    }
+}
+
+#[cfg(test)]
+mod test_default_writer {
+    use serde_json::Number;
+
+    use super::{DefaultWriter, EntryWriter};
+
+    #[test]
+    fn test_write_string() {
+        let mut buffer = Vec::new();
+        let mut writer = DefaultWriter::new(&mut buffer);
+
+        writer.write_string(".", "Some String").unwrap();
+
+        let value = std::str::from_utf8(buffer.as_slice()).unwrap();
+        assert_eq!(". => \"Some String\"\n", value);
+    }
+
+    #[test]
+    fn test_write_number() {
+        let mut buffer = Vec::new();
+        let mut writer = DefaultWriter::new(&mut buffer);
+
+        writer.write_number(".", &Number::from(420)).unwrap();
+
+        let value = std::str::from_utf8(buffer.as_slice()).unwrap();
+        assert_eq!(". => 420\n", value);
+    }
+
+    #[test]
+    fn test_write_bool() {
+        let mut buffer = Vec::new();
+        let mut writer = DefaultWriter::new(&mut buffer);
+
+        writer.write_bool(".", true).unwrap();
+
+        let value = std::str::from_utf8(buffer.as_slice()).unwrap();
+        assert_eq!(". => true\n", value);
+    }
+
+    #[test]
+    fn test_write_null() {
+        let mut buffer = Vec::new();
+        let mut writer = DefaultWriter::new(&mut buffer);
+
+        writer.write_null(".").unwrap();
+
+        let value = std::str::from_utf8(buffer.as_slice()).unwrap();
+        assert_eq!(". => null\n", value);
+    }
+
+    #[test]
+    fn test_write_raw() {
+        let mut buffer = Vec::new();
+        let mut writer = DefaultWriter::new(&mut buffer);
+
+        writer.write_raw(".", "Some String").unwrap();
+
+        let value = std::str::from_utf8(buffer.as_slice()).unwrap();
+        assert_eq!(". => Some String\n", value);
+    }
+}
+
+#[cfg(test)]
+mod test_colored_writer {
+    use serde_json::Number;
+    use termcolor::ColorChoice;
+
+    use super::{ColoredWriter, EntryWriter};
+
+    static FORMAT_RESET: &str = "\u{1b}[0m";
+    static FORMAT_BOLD: &str = "\u{1b}[1m";
+    static COLOR_BLACK: &str = "\u{1b}[30m";
+    static COLOR_GREEN: &str = "\u{1b}[32m";
+    static COLOR_BLUE: &str = "\u{1b}[34m";
+
+    #[test]
+    fn test_write_string_with_color() {
+        let mut buffer = Vec::new();
+        let mut writer = ColoredWriter::new(&mut buffer, ColorChoice::Always);
+
+        writer.write_string(".", "Some String").unwrap();
+
+        let actual = std::str::from_utf8(buffer.as_slice()).unwrap();
+        let expected = format!(
+            "{}{}.{} => {}{}\"Some String\"\n{}",
+            FORMAT_RESET, COLOR_BLUE, FORMAT_RESET, FORMAT_RESET, COLOR_GREEN, FORMAT_RESET
+        );
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_write_string_no_color() {
+        let mut buffer = Vec::new();
+        let mut writer = ColoredWriter::new(&mut buffer, ColorChoice::Never);
+
+        writer.write_string(".", "Some String").unwrap();
+
+        let value = std::str::from_utf8(buffer.as_slice()).unwrap();
+        assert_eq!(". => \"Some String\"\n", value);
+    }
+
+    #[test]
+    fn test_write_number_with_color() {
+        let mut buffer = Vec::new();
+        let mut writer = ColoredWriter::new(&mut buffer, ColorChoice::Always);
+
+        writer.write_number(".", &Number::from(420)).unwrap();
+
+        let actual = std::str::from_utf8(buffer.as_slice()).unwrap();
+        let expected = format!(
+            "{}{}.{} => {}420\n{}",
+            FORMAT_RESET, COLOR_BLUE, FORMAT_RESET, FORMAT_RESET, FORMAT_RESET
+        );
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_write_number_no_color() {
+        let mut buffer = Vec::new();
+        let mut writer = ColoredWriter::new(&mut buffer, ColorChoice::Never);
+
+        writer.write_number(".", &Number::from(420)).unwrap();
+
+        let value = std::str::from_utf8(buffer.as_slice()).unwrap();
+        assert_eq!(". => 420\n", value);
+    }
+
+    #[test]
+    fn test_write_bool_with_color() {
+        let mut buffer = Vec::new();
+        let mut writer = ColoredWriter::new(&mut buffer, ColorChoice::Always);
+
+        writer.write_bool(".", true).unwrap();
+
+        let actual = std::str::from_utf8(buffer.as_slice()).unwrap();
+        let expected = format!(
+            "{}{}.{} => {}true\n{}",
+            FORMAT_RESET, COLOR_BLUE, FORMAT_RESET, FORMAT_RESET, FORMAT_RESET
+        );
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_write_bool_no_color() {
+        let mut buffer = Vec::new();
+        let mut writer = ColoredWriter::new(&mut buffer, ColorChoice::Never);
+
+        writer.write_bool(".", true).unwrap();
+
+        let value = std::str::from_utf8(buffer.as_slice()).unwrap();
+        assert_eq!(". => true\n", value);
+    }
+
+    #[test]
+    fn test_write_null_with_color() {
+        let mut buffer = Vec::new();
+        let mut writer = ColoredWriter::new(&mut buffer, ColorChoice::Always);
+
+        writer.write_null(".").unwrap();
+
+        let actual = std::str::from_utf8(buffer.as_slice()).unwrap();
+        let expected = format!(
+            "{}{}.{} => {}{}{}null\n{}",
+            FORMAT_RESET,
+            COLOR_BLUE,
+            FORMAT_RESET,
+            FORMAT_RESET,
+            FORMAT_BOLD,
+            COLOR_BLACK,
+            FORMAT_RESET
+        );
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_write_null_no_color() {
+        let mut buffer = Vec::new();
+        let mut writer = ColoredWriter::new(&mut buffer, ColorChoice::Never);
+
+        writer.write_null(".").unwrap();
+
+        let value = std::str::from_utf8(buffer.as_slice()).unwrap();
+        assert_eq!(". => null\n", value);
+    }
+
+    #[test]
+    fn test_write_raw_with_color() {
+        let mut buffer = Vec::new();
+        let mut writer = ColoredWriter::new(&mut buffer, ColorChoice::Always);
+
+        writer.write_raw(".", "Some String").unwrap();
+
+        let actual = std::str::from_utf8(buffer.as_slice()).unwrap();
+        let expected = format!(
+            "{}{}.{} => {}{}Some String\n{}",
+            FORMAT_RESET, COLOR_BLUE, FORMAT_RESET, FORMAT_RESET, FORMAT_BOLD, FORMAT_RESET
+        );
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_write_raw_no_color() {
+        let mut buffer = Vec::new();
+        let mut writer = ColoredWriter::new(&mut buffer, ColorChoice::Never);
+
+        writer.write_raw(".", "Some String").unwrap();
+
+        let value = std::str::from_utf8(buffer.as_slice()).unwrap();
+        assert_eq!(". => Some String\n", value);
     }
 }
 

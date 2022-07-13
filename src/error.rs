@@ -1,11 +1,13 @@
 use std::error;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::io;
+use std::str;
 
 pub struct Error(Box<ErrorImpl>);
 
 #[derive(Debug)]
 pub enum ErrorKind {
+    Utf8Error,
     Io(io::ErrorKind),
     JsonDeserialize,
     YamlDeserialize,
@@ -15,6 +17,15 @@ pub enum ErrorKind {
 pub struct ErrorImpl {
     kind: ErrorKind,
     error: Box<dyn error::Error + Send + Sync>,
+}
+
+impl From<str::Utf8Error> for Error {
+    fn from(e: str::Utf8Error) -> Self {
+        Self(Box::new(ErrorImpl {
+            kind: ErrorKind::Utf8Error,
+            error: Box::new(e),
+        }))
+    }
 }
 
 impl From<io::Error> for Error {
