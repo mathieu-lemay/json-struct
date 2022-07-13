@@ -71,7 +71,7 @@ fn parse_input_data(filename: &str, data_type: InputDataType) -> Result<Value> {
 
 trait EntryWriter {
     fn write_string(&self, path: &str, value: &str) -> Result<()> {
-        println!("{} => {}", path, value);
+        println!("{} => {}", path, value.replace('\n', "\\n"));
 
         Ok(())
     }
@@ -145,7 +145,12 @@ impl ColoredWriter {
 
 impl EntryWriter for ColoredWriter {
     fn write_string(&self, path: &str, value: &str) -> Result<()> {
-        self._write_value(path, &format!("\"{}\"", value), Some(Color::Green), false)
+        self._write_value(
+            path,
+            &format!("\"{}\"", value.replace('\n', "\\n")),
+            Some(Color::Green),
+            false,
+        )
     }
 
     fn write_number(&self, path: &str, value: &Number) -> Result<()> {
