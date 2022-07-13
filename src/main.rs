@@ -182,7 +182,7 @@ fn get_writer(color: CmdColor) -> Box<dyn EntryWriter> {
 fn escape_path_element(p: String) -> String {
     let p = p.replace('"', "\\\"");
 
-    if p.chars().any(|c| !c.is_digit(36)) {
+    if p.chars().any(|c| !c.is_ascii_alphanumeric() && c != '_') {
         format!("\"{}\"", p)
     } else {
         p
@@ -471,6 +471,10 @@ mod test_escape_path_element {
     #[test]
     fn test_nothing_to_escape() {
         assert_eq!(escape_path_element("foo".to_string()), "foo");
+        assert_eq!(
+            escape_path_element("key_with_underscores".to_string()),
+            "key_with_underscores"
+        );
     }
 
     #[test]
@@ -479,10 +483,14 @@ mod test_escape_path_element {
             escape_path_element("Mathieu Lemay [0]".to_string()),
             "\"Mathieu Lemay [0]\""
         );
+        assert_eq!(
+            escape_path_element("key-with-dashes".to_string()),
+            "\"key-with-dashes\""
+        );
     }
 
     #[test]
-    fn test_test_escape_double_quotes() {
+    fn test_escape_double_quotes() {
         assert_eq!(
             escape_path_element("Mathieu \"Uncle Matt\" Lemay".to_string()),
             r#""Mathieu \"Uncle Matt\" Lemay""#
