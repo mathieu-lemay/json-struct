@@ -108,6 +108,7 @@ dependencies = [
  "atty",
  "clap",
  "clap_complete",
+ "lazy_static",
  "serde_json",
  "serde_yaml",
  "termcolor",
