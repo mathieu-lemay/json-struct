@@ -11,6 +11,10 @@ use console::ConsoleWriter;
 
 mod console;
 
+#[cfg(test)]
+use mockall::{automock, predicate::*};
+
+#[cfg_attr(test, automock)]
 pub(super) trait ValueWriter {
     fn write_string(&mut self, path: &str, value: &str) -> Result<()>;
     fn write_number(&mut self, path: &str, value: &Number) -> Result<()>;
@@ -84,82 +88,49 @@ fn escape_path_element(p: String) -> String {
 
 #[cfg(test)]
 mod test_print_value {
-    use std::sync::Mutex;
-
     use serde_json::{Map, Number, Value};
 
-    use crate::error::Result;
-
-    use super::{print_value, ValueWriter};
-
-    struct TestWriter {
-        buffer: Mutex<Vec<String>>,
-    }
-
-    impl TestWriter {
-        fn new() -> Self {
-            Self {
-                buffer: Mutex::new(Vec::new()),
-            }
-        }
-    }
-
-    impl ValueWriter for TestWriter {
-        fn write_string(&mut self, path: &str, value: &str) -> Result<()> {
-            let value = format!("{} => String({})", path, value);
-            self.buffer.lock().unwrap().push(value);
-
-            Ok(())
-        }
-
-        fn write_number(&mut self, path: &str, value: &Number) -> Result<()> {
-            let value = format!("{} => Number({})", path, value);
-            self.buffer.lock().unwrap().push(value);
-
-            Ok(())
-        }
-
-        fn write_bool(&mut self, path: &str, value: bool) -> Result<()> {
-            let value = format!("{} => Bool({})", path, value);
-            self.buffer.lock().unwrap().push(value);
-
-            Ok(())
-        }
-
-        fn write_null(&mut self, path: &str) -> Result<()> {
-            let value = format!("{} => Null()", path);
-            self.buffer.lock().unwrap().push(value);
-
-            Ok(())
-        }
-
-        fn write_raw(&mut self, path: &str, value: &str) -> Result<()> {
-            let value = format!("{} => Raw({})", path, value);
-            self.buffer.lock().unwrap().push(value);
-
-            Ok(())
-        }
-    }
+    use super::*;
 
     #[test]
     fn test_print_object() {
-        let mut writer = TestWriter::new();
+        let mut writer = MockValueWriter::new();
+        writer
+            .expect_write_string()
+            .with(eq(".foo"), eq("bar"))
+            .times(1)
+            .returning(|_, _| Ok(()));
+        writer
+            .expect_write_null()
+            .with(eq(".baz"))
+            .times(1)
+            .returning(|_| Ok(()));
 
         let mut map = Map::new();
         map.insert("foo".to_string(), Value::String("bar".to_string()));
         map.insert("baz".to_string(), Value::Null);
 
         print_value(".", Value::Object(map), &mut writer).unwrap();
-
-        let mut values = writer.buffer.lock().unwrap();
-        values.sort();
-
-        assert_eq!(*values, vec![".baz => Null()", ".foo => String(bar)"]);
     }
 
     #[test]
     fn test_print_array() {
-        let mut writer = TestWriter::new();
+        let mut writer = MockValueWriter::new();
+        writer
+            .expect_write_string()
+            .with(eq(".[0]"), eq("foo"))
+            .times(1)
+            .returning(|_, _| Ok(()));
+        writer
+            .expect_write_number()
+            .with(eq(".[1]"), eq(Number::from(0)))
+            .times(1)
+            .returning(|_, _| Ok(()));
+        writer
+            .expect_write_bool()
+            .with(eq(".[2]"), eq(true))
+            .times(1)
+            .returning(|_, _| Ok(()));
 
         let arr = vec![
             Value::String("foo".to_string()),
@@ -168,56 +139,94 @@ mod test_print_value {
         ];
 
         print_value(".", Value::Array(arr), &mut writer).unwrap();
-
-        assert_eq!(
-            *writer.buffer.lock().unwrap(),
-            vec![
-                ".[0] => String(foo)",
-                ".[1] => Number(0)",
-                ".[2] => Bool(true)"
-            ]
-        );
     }
 
     #[test]
     fn test_print_str() {
-        let mut writer = TestWriter::new();
+        let mut writer = MockValueWriter::new();
+        writer
+            .expect_write_string()
+            .with(eq("foo"), eq("bar"))
+            .times(1)
+            .returning(|_, _| Ok(()));
 
         print_value("foo", Value::String("bar".to_string()), &mut writer).unwrap();
-
-        assert_eq!(*writer.buffer.lock().unwrap(), vec!["foo => String(bar)"]);
     }
 
     #[test]
     fn test_print_number() {
-        let mut writer = TestWriter::new();
+        let mut writer = MockValueWriter::new();
+        writer
+            .expect_write_number()
+            .with(eq("foo"), eq(Number::from(69)))
+            .times(1)
+            .returning(|_, _| Ok(()));
 
         print_value("foo", Value::Number(Number::from(69)), &mut writer).unwrap();
-
-        assert_eq!(*writer.buffer.lock().unwrap(), vec!["foo => Number(69)"]);
     }
 
     #[test]
     fn test_print_bool() {
-        let mut writer = TestWriter::new();
+        let mut writer = MockValueWriter::new();
+        writer
+            .expect_write_bool()
+            .with(eq("foo"), eq(true))
+            .times(1)
+            .returning(|_, _| Ok(()));
 
         print_value("foo", Value::Bool(true), &mut writer).unwrap();
-
-        assert_eq!(*writer.buffer.lock().unwrap(), vec!["foo => Bool(true)"]);
     }
 
     #[test]
     fn test_print_null() {
-        let mut writer = TestWriter::new();
+        let mut writer = MockValueWriter::new();
+        writer
+            .expect_write_null()
+            .with(eq("foo"))
+            .times(1)
+            .returning(|_| Ok(()));
 
         print_value("foo", Value::Null, &mut writer).unwrap();
-
-        assert_eq!(*writer.buffer.lock().unwrap(), vec!["foo => Null()"]);
     }
 
     #[test]
     fn test_print_complex() {
-        let mut writer = TestWriter::new();
+        let mut writer = MockValueWriter::new();
+        writer
+            .expect_write_string()
+            .with(eq(r#"."first name""#), eq("John"))
+            .times(1)
+            .returning(|_, _| Ok(()));
+        writer
+            .expect_write_string()
+            .with(eq(r#"."last name""#), eq("Doe"))
+            .times(1)
+            .returning(|_, _| Ok(()));
+        writer
+            .expect_write_number()
+            .with(eq(".age"), eq(Number::from(43)))
+            .times(1)
+            .returning(|_, _| Ok(()));
+        writer
+            .expect_write_string()
+            .with(eq(".address.street"), eq("10 Downing Street"))
+            .times(1)
+            .returning(|_, _| Ok(()));
+        writer
+            .expect_write_string()
+            .with(eq(".address.city"), eq("London"))
+            .times(1)
+            .returning(|_, _| Ok(()));
+        writer
+            .expect_write_string()
+            .with(eq(".phones[0]"), eq("+44 1234567"))
+            .times(1)
+            .returning(|_, _| Ok(()));
+        writer
+            .expect_write_string()
+            .with(eq(".phones[1]"), eq("+44 2345678"))
+            .times(1)
+            .returning(|_, _| Ok(()));
 
         let data = r#"
         {
@@ -237,27 +246,21 @@ mod test_print_value {
         let value: Value = serde_json::from_str(data).unwrap();
 
         print_value(".", value, &mut writer).unwrap();
-
-        let mut values = writer.buffer.lock().unwrap();
-        values.sort();
-
-        assert_eq!(
-            *values,
-            vec![
-                r#"."first name" => String(John)"#,
-                r#"."last name" => String(Doe)"#,
-                ".address.city => String(London)",
-                ".address.street => String(10 Downing Street)",
-                ".age => Number(43)",
-                ".phones[0] => String(+44 1234567)",
-                ".phones[1] => String(+44 2345678)",
-            ]
-        );
     }
 
     #[test]
-    fn test_empty_dicts_and_arrays_are_output() {
-        let mut writer = TestWriter::new();
+    fn test_empty_dicts_and_arrays_are_printed() {
+        let mut writer = MockValueWriter::new();
+        writer
+            .expect_write_raw()
+            .with(eq(".address"), eq("{}"))
+            .times(1)
+            .returning(|_, _| Ok(()));
+        writer
+            .expect_write_raw()
+            .with(eq(".phones"), eq("[]"))
+            .times(1)
+            .returning(|_, _| Ok(()));
 
         let data = r#"
         {
@@ -269,10 +272,10 @@ mod test_print_value {
 
         print_value(".", value, &mut writer).unwrap();
 
-        let mut values = writer.buffer.lock().unwrap();
-        values.sort();
+        // let mut values = writer.buffer.lock().unwrap();
+        // values.sort();
 
-        assert_eq!(*values, vec![".address => Raw({})", ".phones => Raw([])"]);
+        // assert_eq!(*values, vec![".address => Raw({})", ".phones => Raw([])"]);
     }
 }
 
