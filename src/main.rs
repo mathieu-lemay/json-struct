@@ -125,7 +125,7 @@ impl<'a> std::io::Write for GrepWriter<'a> {
         if self.regex.is_match(str::from_utf8(buf).unwrap()) {
             return self.sink.write(buf);
         }
-        return Ok(buf.len());
+        Ok(buf.len())
     }
 
     fn flush(&mut self) -> io::Result<()> {
