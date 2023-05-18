@@ -3,7 +3,7 @@ mod test_parse_stdin {
     use assert_cmd::Command;
 
     #[test]
-    fn test_json_no_color() {
+    fn test_json() {
         let assert = Command::cargo_bin(env!("CARGO_PKG_NAME"))
             .unwrap()
             .pipe_stdin("./tests/example.json")
@@ -35,41 +35,7 @@ mod test_parse_stdin {
     }
 
     #[test]
-    fn test_json_with_color() {
-        let assert = Command::cargo_bin(env!("CARGO_PKG_NAME"))
-            .unwrap()
-            .args(["-c", "always"])
-            .pipe_stdin("./tests/example.json")
-            .unwrap()
-            .assert();
-
-        let output = assert.get_output().stdout.clone();
-        assert.success();
-
-        let stdout = String::from_utf8(output).unwrap();
-        let expected_output = concat!(
-            "\u{1b}[0m\u{1b}[34m.alias.bar\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"baz\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.alias_reuse.bar\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"baz\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.content\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"Or we\\ncan auto\\nconvert line breaks\\nto save space\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.json[0]\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"rigid\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.json[1]\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"better for data interchange\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.object.array[0].null_value\u{1b}[0m => \u{1b}[0m\u{1b}[1m\u{1b}[30mnull\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.object.array[1].boolean\u{1b}[0m => true\n",
-            "\u{1b}[0m\u{1b}[34m.object.array[2].integer\u{1b}[0m => 1\n",
-            "\u{1b}[0m\u{1b}[34m.object.array[3].alias\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"aliases are like variables\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.object.array[4].alias\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"aliases are like variables\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.object.key\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"value\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.paragraph\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"Blank lines denote\\nparagraph breaks\\n\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.yaml[0]\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"slim and flexible\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.yaml[1]\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"better for configuration\"\n",
-            "\u{1b}[0m",
-        );
-
-        assert_eq!(stdout, expected_output);
-    }
-
-    #[test]
-    fn test_yaml_no_color() {
+    fn test_yaml() {
         let assert = Command::cargo_bin(env!("CARGO_PKG_NAME"))
             .unwrap()
             .args(["-t", "yaml"])
@@ -102,11 +68,11 @@ mod test_parse_stdin {
     }
 
     #[test]
-    fn test_yaml_with_color() {
+    fn test_toml() {
         let assert = Command::cargo_bin(env!("CARGO_PKG_NAME"))
             .unwrap()
-            .args(["-t", "yaml", "-c", "always"])
-            .pipe_stdin("./tests/example.yaml")
+            .args(["-t", "toml"])
+            .pipe_stdin("./tests/example.toml")
             .unwrap()
             .assert();
 
@@ -115,21 +81,25 @@ mod test_parse_stdin {
 
         let stdout = String::from_utf8(output).unwrap();
         let expected_output = concat!(
-            "\u{1b}[0m\u{1b}[34m.alias.bar\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"baz\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.alias_reuse.bar\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"baz\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.content\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"Or we\\ncan auto\\nconvert line breaks\\nto save space\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.json[0]\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"rigid\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.json[1]\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"better for data interchange\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.object.array[0].null_value\u{1b}[0m => \u{1b}[0m\u{1b}[1m\u{1b}[30mnull\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.object.array[1].boolean\u{1b}[0m => true\n",
-            "\u{1b}[0m\u{1b}[34m.object.array[2].integer\u{1b}[0m => 1\n",
-            "\u{1b}[0m\u{1b}[34m.object.array[3].alias\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"aliases are like variables\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.object.array[4].alias\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"aliases are like variables\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.object.key\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"value\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.paragraph\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"Blank lines denote\\nparagraph breaks\\n\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.yaml[0]\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"slim and flexible\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.yaml[1]\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"better for configuration\"\n",
-            "\u{1b}[0m",
+            ".clients.data[0][0] => \"gamma\"\n",
+            ".clients.data[0][1] => \"delta\"\n",
+            ".clients.data[1][0] => 1\n",
+            ".clients.data[1][1] => 2\n",
+            ".clients.hosts[0] => \"alpha\"\n",
+            ".clients.hosts[1] => \"omega\"\n",
+            ".database.connection_max => 5000\n",
+            ".database.enabled => true\n",
+            ".database.ports[0] => 8000\n",
+            ".database.ports[1] => 8001\n",
+            ".database.ports[2] => 8002\n",
+            ".database.server => \"192.168.1.1\"\n",
+            ".owner.dob.\"$__toml_private_datetime\" => \"1979-05-27T07:32:00-08:00\"\n",
+            ".owner.name => \"Tom Preston-Werner\"\n",
+            ".servers.alpha.dc => \"eqdc10\"\n",
+            ".servers.alpha.ip => \"10.0.0.1\"\n",
+            ".servers.beta.dc => \"eqdc10\"\n",
+            ".servers.beta.ip => \"10.0.0.2\"\n",
+            ".title => \"TOML Example\"\n",
         );
 
         assert_eq!(stdout, expected_output);
@@ -141,7 +111,7 @@ mod test_parse_file {
     use assert_cmd::Command;
 
     #[test]
-    fn test_json_no_color() {
+    fn test_json() {
         let assert = Command::cargo_bin(env!("CARGO_PKG_NAME"))
             .unwrap()
             .arg("./tests/example.json")
@@ -172,39 +142,7 @@ mod test_parse_file {
     }
 
     #[test]
-    fn test_json_with_color() {
-        let assert = Command::cargo_bin(env!("CARGO_PKG_NAME"))
-            .unwrap()
-            .args(["./tests/example.json", "-c", "always"])
-            .assert();
-
-        let output = assert.get_output().stdout.clone();
-        assert.success();
-
-        let stdout = String::from_utf8(output).unwrap();
-        let expected_output = concat!(
-            "\u{1b}[0m\u{1b}[34m.alias.bar\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"baz\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.alias_reuse.bar\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"baz\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.content\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"Or we\\ncan auto\\nconvert line breaks\\nto save space\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.json[0]\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"rigid\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.json[1]\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"better for data interchange\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.object.array[0].null_value\u{1b}[0m => \u{1b}[0m\u{1b}[1m\u{1b}[30mnull\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.object.array[1].boolean\u{1b}[0m => true\n",
-            "\u{1b}[0m\u{1b}[34m.object.array[2].integer\u{1b}[0m => 1\n",
-            "\u{1b}[0m\u{1b}[34m.object.array[3].alias\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"aliases are like variables\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.object.array[4].alias\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"aliases are like variables\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.object.key\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"value\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.paragraph\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"Blank lines denote\\nparagraph breaks\\n\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.yaml[0]\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"slim and flexible\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.yaml[1]\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"better for configuration\"\n",
-            "\u{1b}[0m",
-        );
-
-        assert_eq!(stdout, expected_output);
-    }
-
-    #[test]
-    fn test_yaml_no_color() {
+    fn test_yaml() {
         let assert = Command::cargo_bin(env!("CARGO_PKG_NAME"))
             .unwrap()
             .arg("./tests/example.yaml")
@@ -235,10 +173,10 @@ mod test_parse_file {
     }
 
     #[test]
-    fn test_yaml_with_color() {
+    fn test_toml() {
         let assert = Command::cargo_bin(env!("CARGO_PKG_NAME"))
             .unwrap()
-            .args(["./tests/example.yaml", "-c", "always"])
+            .arg("./tests/example.toml")
             .assert();
 
         let output = assert.get_output().stdout.clone();
@@ -246,20 +184,48 @@ mod test_parse_file {
 
         let stdout = String::from_utf8(output).unwrap();
         let expected_output = concat!(
-            "\u{1b}[0m\u{1b}[34m.alias.bar\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"baz\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.alias_reuse.bar\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"baz\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.content\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"Or we\\ncan auto\\nconvert line breaks\\nto save space\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.json[0]\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"rigid\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.json[1]\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"better for data interchange\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.object.array[0].null_value\u{1b}[0m => \u{1b}[0m\u{1b}[1m\u{1b}[30mnull\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.object.array[1].boolean\u{1b}[0m => true\n",
-            "\u{1b}[0m\u{1b}[34m.object.array[2].integer\u{1b}[0m => 1\n",
-            "\u{1b}[0m\u{1b}[34m.object.array[3].alias\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"aliases are like variables\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.object.array[4].alias\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"aliases are like variables\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.object.key\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"value\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.paragraph\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"Blank lines denote\\nparagraph breaks\\n\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.yaml[0]\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"slim and flexible\"\n",
-            "\u{1b}[0m\u{1b}[0m\u{1b}[34m.yaml[1]\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"better for configuration\"\n",
+            ".clients.data[0][0] => \"gamma\"\n",
+            ".clients.data[0][1] => \"delta\"\n",
+            ".clients.data[1][0] => 1\n",
+            ".clients.data[1][1] => 2\n",
+            ".clients.hosts[0] => \"alpha\"\n",
+            ".clients.hosts[1] => \"omega\"\n",
+            ".database.connection_max => 5000\n",
+            ".database.enabled => true\n",
+            ".database.ports[0] => 8000\n",
+            ".database.ports[1] => 8001\n",
+            ".database.ports[2] => 8002\n",
+            ".database.server => \"192.168.1.1\"\n",
+            ".owner.dob.\"$__toml_private_datetime\" => \"1979-05-27T07:32:00-08:00\"\n",
+            ".owner.name => \"Tom Preston-Werner\"\n",
+            ".servers.alpha.dc => \"eqdc10\"\n",
+            ".servers.alpha.ip => \"10.0.0.1\"\n",
+            ".servers.beta.dc => \"eqdc10\"\n",
+            ".servers.beta.ip => \"10.0.0.2\"\n",
+            ".title => \"TOML Example\"\n",
+        );
+
+        assert_eq!(stdout, expected_output);
+    }
+}
+
+mod test_color {
+    use assert_cmd::Command;
+
+    #[test]
+    fn test_with_color() {
+        let assert = Command::cargo_bin(env!("CARGO_PKG_NAME"))
+            .unwrap()
+            .args(["-c", "always"])
+            .write_stdin("{\"foo\": \"bar\"}")
+            .assert();
+
+        let output = assert.get_output().stdout.clone();
+        assert.success();
+
+        let stdout = String::from_utf8(output).unwrap();
+        let expected_output = concat!(
+            "\u{1b}[0m\u{1b}[34m.foo\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"bar\"\n",
             "\u{1b}[0m",
         );
 
