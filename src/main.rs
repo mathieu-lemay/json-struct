@@ -3,12 +3,13 @@ extern crate lazy_static;
 
 use std::ffi::OsStr;
 use std::fs::File;
-use std::io::{self, stdin, BufReader, Read};
+use std::io::{self, stdin, BufReader, Read, Write};
 use std::path::Path;
 use std::str;
 
 use clap::{CommandFactory, Parser, ValueEnum};
 use clap_complete::{generate, Shell};
+use regex::Regex;
 use serde_json::Value;
 
 use error::Result;
@@ -63,6 +64,9 @@ struct Args {
     )]
     color: CmdColor,
 
+    #[clap(short, long, help = "Apply a regex search on the output")]
+    pattern: Option<String>,
+
     #[clap(long, value_enum, help = "Generate completion for a shell")]
     completion: Option<Shell>,
 }
@@ -111,6 +115,24 @@ fn parse_input_data(filename: &str, data_type: InputDataType) -> Result<Value> {
     Ok(val)
 }
 
+struct GrepWriter<'a> {
+    sink: &'a mut dyn Write,
+    regex: Regex,
+}
+
+impl<'a> std::io::Write for GrepWriter<'a> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        if self.regex.is_match(str::from_utf8(buf).unwrap()) {
+            return self.sink.write(buf);
+        }
+        return Ok(buf.len());
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.sink.flush()
+    }
+}
+
 fn main() -> Result<()> {
     let args = Args::parse();
 
@@ -126,7 +148,20 @@ fn main() -> Result<()> {
 
     let data_type = detect_data_type(&args.file, args.data_type);
     let data = parse_input_data(&args.file, data_type)?;
-    let mut output_writer = io::stdout();
+
+    let regex = args
+        .pattern
+        .map(|p| Regex::new(&p).expect("Invalid regex pattern"));
+
+    let mut stdout = io::stdout();
+
+    let mut output_writer: Box<dyn Write> = match regex {
+        Some(r) => Box::new(GrepWriter {
+            sink: &mut stdout,
+            regex: r,
+        }),
+        None => Box::new(stdout),
+    };
     let mut value_writer = get_writer(&mut output_writer, args.color);
 
     print_value(".", data, &mut (*value_writer))

@@ -232,3 +232,31 @@ mod test_color {
         assert_eq!(stdout, expected_output);
     }
 }
+
+#[cfg(test)]
+mod test_regex {
+    use assert_cmd::Command;
+
+    #[test]
+    fn test_apply_regex_pattern() {
+        let assert = Command::cargo_bin(env!("CARGO_PKG_NAME"))
+            .unwrap()
+            .args(["-p", "alias"])
+            .pipe_stdin("./tests/example.json")
+            .unwrap()
+            .assert();
+
+        let output = assert.get_output().stdout.clone();
+        assert.success();
+
+        let stdout = String::from_utf8(output).unwrap();
+        let expected_output = concat!(
+            ".alias.bar => \"baz\"\n",
+            ".alias_reuse.bar => \"baz\"\n",
+            ".object.array[3].alias => \"aliases are like variables\"\n",
+            ".object.array[4].alias => \"aliases are like variables\"\n",
+        );
+
+        assert_eq!(stdout, expected_output);
+    }
+}
