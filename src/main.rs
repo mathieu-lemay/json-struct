@@ -21,6 +21,7 @@ mod value_writer;
 enum InputDataType {
     Json,
     Yaml,
+    Toml,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, ArgEnum)]
@@ -28,6 +29,7 @@ enum CmdDataType {
     Auto,
     Json,
     Yaml,
+    Toml,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, ArgEnum)]
@@ -82,21 +84,28 @@ fn detect_data_type(filename: &str, data_type: CmdDataType) -> InputDataType {
     match data_type {
         CmdDataType::Json => InputDataType::Json,
         CmdDataType::Yaml => InputDataType::Yaml,
+        CmdDataType::Toml => InputDataType::Toml,
         _ => match get_extension_from_filename(filename) {
             Some("json") => InputDataType::Json,
             Some("yaml") => InputDataType::Yaml,
             Some("yml") => InputDataType::Yaml,
+            Some("toml") => InputDataType::Toml,
             _ => InputDataType::Json,
         },
     }
 }
 
 fn parse_input_data(filename: &str, data_type: InputDataType) -> Result<Value> {
-    let rd = get_reader(filename);
+    let mut rd = get_reader(filename);
 
     let val = match data_type {
         InputDataType::Json => serde_json::from_reader(rd)?,
         InputDataType::Yaml => serde_yaml::from_reader(rd)?,
+        InputDataType::Toml => {
+            let mut buf: String = Default::default();
+            rd.read_to_string(&mut buf)?;
+            toml::from_str(&buf)?
+        }
     };
 
     Ok(val)
@@ -179,6 +188,14 @@ mod test_detect_data_type {
     }
 
     #[test]
+    fn test_forcing_toml_returns_toml_type() {
+        assert_eq!(
+            detect_data_type("file.json", CmdDataType::Toml),
+            InputDataType::Toml
+        );
+    }
+
+    #[test]
     fn test_file_with_json_extension_returns_json_type() {
         assert_eq!(
             detect_data_type("file.json", CmdDataType::Auto),
@@ -199,6 +216,14 @@ mod test_detect_data_type {
         assert_eq!(
             detect_data_type("file.yml", CmdDataType::Auto),
             InputDataType::Yaml
+        );
+    }
+
+    #[test]
+    fn test_file_with_toml_extension_returns_toml_type() {
+        assert_eq!(
+            detect_data_type("file.toml", CmdDataType::Auto),
+            InputDataType::Toml
         );
     }
 

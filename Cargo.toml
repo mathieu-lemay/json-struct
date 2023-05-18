@@ -16,6 +16,7 @@ serde_yaml = "0.9.14"
 termcolor = "1.1"
 atty = "0.2"
 lazy_static = "1.4.0"
+toml = "0.7.3"
 
 [dev-dependencies]
 assert_cmd = "2.0.4"

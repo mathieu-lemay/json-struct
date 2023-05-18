@@ -11,6 +11,7 @@ pub enum ErrorKind {
     Io(io::ErrorKind),
     JsonDeserialize,
     YamlDeserialize,
+    TomlDeserialize,
 }
 
 #[derive(Debug)]
@@ -50,6 +51,15 @@ impl From<serde_yaml::Error> for Error {
     fn from(e: serde_yaml::Error) -> Self {
         Self(Box::new(ErrorImpl {
             kind: ErrorKind::YamlDeserialize,
+            error: Box::new(e),
+        }))
+    }
+}
+
+impl From<toml::de::Error> for Error {
+    fn from(e: toml::de::Error) -> Self {
+        Self(Box::new(ErrorImpl {
+            kind: ErrorKind::TomlDeserialize,
             error: Box::new(e),
         }))
     }
