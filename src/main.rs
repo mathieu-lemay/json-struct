@@ -7,7 +7,7 @@ use std::io::{self, stdin, BufReader, Read};
 use std::path::Path;
 use std::str;
 
-use clap::{ArgEnum, CommandFactory, Parser};
+use clap::{CommandFactory, Parser, ValueEnum};
 use clap_complete::{generate, Shell};
 use serde_json::Value;
 
@@ -24,7 +24,7 @@ enum InputDataType {
     Toml,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, ArgEnum)]
+#[derive(Debug, Clone, PartialEq, Eq, ValueEnum)]
 enum CmdDataType {
     Auto,
     Json,
@@ -32,7 +32,7 @@ enum CmdDataType {
     Toml,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, ArgEnum)]
+#[derive(Debug, Clone, PartialEq, Eq, ValueEnum)]
 enum CmdColor {
     Auto,
     Always,
@@ -48,7 +48,7 @@ struct Args {
     #[clap(
         short = 't',
         long = "type",
-        arg_enum,
+        value_enum,
         help = "Specify input data type. Auto detect if not specified",
         default_value = "auto"
     )]
@@ -57,13 +57,13 @@ struct Args {
     #[clap(
         short,
         long,
-        arg_enum,
+        value_enum,
         help = "Colorize the output",
         default_value = "auto"
     )]
     color: CmdColor,
 
-    #[clap(long, arg_enum, help = "Generate completion for a shell")]
+    #[clap(long, value_enum, help = "Generate completion for a shell")]
     completion: Option<Shell>,
 }
 
