@@ -323,6 +323,7 @@ dependencies = [
  "clap_complete",
  "lazy_static",
  "mockall",
+ "regex",
  "serde_json",
  "serde_yaml",
  "termcolor",
