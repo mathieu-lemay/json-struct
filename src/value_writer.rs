@@ -1,6 +1,7 @@
 use std::io::Write;
 use std::str;
 
+use is_terminal::is_terminal;
 use serde_json::{Number, Value};
 use termcolor::ColorChoice;
 
@@ -26,7 +27,7 @@ pub(super) trait ValueWriter {
 pub(super) fn get_writer(writer: &mut dyn Write, color: CmdColor) -> Box<dyn ValueWriter + '_> {
     let color_choice = match color {
         CmdColor::Auto => {
-            if atty::is(atty::Stream::Stdout) {
+            if is_terminal(std::io::stdout()) {
                 ColorChoice::Auto
             } else {
                 ColorChoice::Never
