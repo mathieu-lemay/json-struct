@@ -80,7 +80,9 @@ fn escape_str_value(value: &str) -> String {
 fn escape_path_element(p: String) -> String {
     let p = p.replace('"', "\\\"");
 
-    if p.chars().any(|c| !c.is_ascii_alphanumeric() && c != '_') {
+    if p.chars().any(|c| !c.is_ascii_alphanumeric() && c != '_')
+        || p.chars().all(|c| c.is_numeric())
+    {
         format!("\"{}\"", p)
     } else {
         p
@@ -296,13 +298,20 @@ mod test_escape_path_element {
     #[test]
     fn test_wrap_strings_with_non_alnum_chars_in_double_quotes() {
         assert_eq!(
-            escape_path_element("Mathieu Lemay [0]".to_string()),
-            "\"Mathieu Lemay [0]\""
+            escape_path_element("Key with brackets [0]".to_string()),
+            "\"Key with brackets [0]\""
         );
         assert_eq!(
             escape_path_element("key-with-dashes".to_string()),
             "\"key-with-dashes\""
         );
+    }
+
+    #[test]
+    /// Keys composed of only digits need to be wrapped in quotes
+    fn test_wrap_strings_with_only_digits_in_double_quotes() {
+        assert_eq!(escape_path_element("123".to_string()), "\"123\"");
+        assert_eq!(escape_path_element("abc123".to_string()), "abc123");
     }
 
     #[test]
