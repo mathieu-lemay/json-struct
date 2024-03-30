@@ -90,6 +90,57 @@ fn escape_path_element(p: String) -> String {
 }
 
 #[cfg(test)]
+mod test_get_writer {
+    use std::str;
+
+    use crate::CmdColor;
+    use super::get_writer;
+
+    #[test]
+    fn test_get_writer_with_color_auto() {
+        let mut buffer = Vec::new();
+
+        {
+            // TODO: figure out a way to test with is_terminal => false
+            let mut writer = get_writer(&mut buffer, CmdColor::Auto);
+            writer.write_string("path", "value").expect("Unable to write value");
+        }
+
+        let value = str::from_utf8(buffer.as_slice()).expect("Error getting string from buffer");
+
+        assert_eq!(value, "\u{1b}[0m\u{1b}[34mpath\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"value\"\n\u{1b}[0m".to_owned());
+    }
+
+    #[test]
+    fn test_get_writer_with_color_always() {
+        let mut buffer = Vec::new();
+
+        {
+            let mut writer = get_writer(&mut buffer, CmdColor::Always);
+            writer.write_string("path", "value").expect("Unable to write value");
+        }
+
+        let value = str::from_utf8(buffer.as_slice()).expect("Error getting string from buffer");
+
+        assert_eq!(value, "\u{1b}[0m\u{1b}[34mpath\u{1b}[0m => \u{1b}[0m\u{1b}[32m\"value\"\n\u{1b}[0m".to_owned());
+    }
+
+    #[test]
+    fn test_get_writer_with_color_never() {
+        let mut buffer = Vec::new();
+
+        {
+            let mut writer = get_writer(&mut buffer, CmdColor::Never);
+            writer.write_string("path", "value").expect("Unable to write value");
+        }
+
+        let value = str::from_utf8(buffer.as_slice()).expect("Error getting string from buffer");
+
+        assert_eq!(value, "path => \"value\"\n".to_owned());
+    }
+}
+
+#[cfg(test)]
 mod test_print_value {
     use serde_json::{Map, Number, Value};
 
