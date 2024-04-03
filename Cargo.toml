@@ -1,6 +1,6 @@
 [package]
 name = "json-struct"
-version = "0.1.5"
+version = "0.1.6"
 description = "Shows the full struct of a json or yaml file"
 authors = ["Mathieu Lemay <acidrain1@gmail.com>"]
 repository = "https://github.com/mathieu-lemay/json-struct"
