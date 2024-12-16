@@ -58,7 +58,7 @@ impl<'a> ConsoleWriter<'a> {
     }
 }
 
-impl<'a> ValueWriter for ConsoleWriter<'a> {
+impl ValueWriter for ConsoleWriter<'_> {
     fn write_string(&mut self, path: &str, value: &str) -> Result<()> {
         self.write_value(
             path,

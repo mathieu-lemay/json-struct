@@ -119,7 +119,7 @@ struct GrepWriter<'a> {
     regex: Regex,
 }
 
-impl<'a> std::io::Write for GrepWriter<'a> {
+impl std::io::Write for GrepWriter<'_> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         if self.regex.is_match(str::from_utf8(buf).unwrap()) {
             return self.sink.write(buf);
