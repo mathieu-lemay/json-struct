@@ -9,10 +9,9 @@ use std::str;
 
 use clap::{CommandFactory, Parser, ValueEnum};
 use clap_complete::{generate, Shell};
+use error::Result;
 use regex::Regex;
 use serde_json::Value;
-
-use error::Result;
 use value_writer::{get_writer, print_value};
 
 mod error;
@@ -202,9 +201,8 @@ mod test_get_extension_from_filename {
 
 #[cfg(test)]
 mod test_detect_data_type {
-    use crate::CmdDataType;
-
     use super::{detect_data_type, InputDataType};
+    use crate::CmdDataType;
 
     #[test]
     fn test_forcing_json_returns_json_type() {

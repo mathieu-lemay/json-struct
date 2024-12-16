@@ -100,4 +100,3 @@ jobs:
         asset_name: json-struct-${{ matrix.target }}.tar.gz
         asset_path: ./json-struct.tar.gz
         asset_content_type: application/gzip
-

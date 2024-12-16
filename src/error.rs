@@ -1,13 +1,12 @@
-use std::error;
 use std::fmt::{self, Debug, Display, Formatter};
-use std::io;
-use std::str;
+use std::{error, io, str};
 
 pub struct Error(Box<ErrorImpl>);
 
 #[derive(Debug)]
 pub enum ErrorKind {
     Utf8Error,
+    #[allow(dead_code)]
     Io(io::ErrorKind),
     JsonDeserialize,
     YamlDeserialize,

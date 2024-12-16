@@ -1,8 +1,18 @@
 repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
   - repo: https://github.com/doublify/pre-commit-rust
     rev: v1.0
     hooks:
       - id: fmt
+        entry: cargo +nightly fmt
       - id: clippy
+        args: ["--all-targets", "--", "-D", "warnings"]
 
 # vim: ts=2 sw=2

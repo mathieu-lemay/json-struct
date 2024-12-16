@@ -1,14 +1,13 @@
 use std::io::Write;
 use std::str;
 
+use console::ConsoleWriter;
 use is_terminal::is_terminal;
 use serde_json::{Number, Value};
 use termcolor::ColorChoice;
 
 use crate::error::Result;
 use crate::CmdColor;
-
-use console::ConsoleWriter;
 
 mod console;
 
